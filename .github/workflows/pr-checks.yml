@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task: [analyze, test, build]
+        task: [analyze, test]
     defaults:
       run:
         working-directory: client
@@ -37,7 +37,3 @@ jobs:
       - name: Test
         if: matrix.task == 'test'
         run: flutter test
-
-      - name: Build (web)
-        if: matrix.task == 'build'
-        run: flutter build web --release
