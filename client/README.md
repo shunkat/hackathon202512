@@ -1,16 +1,20 @@
 # client
 
-A new Flutter project.
+Flutter 製のモバイルアプリです。FVM 経由で Flutter 3.38.5 を使用します。
 
-## Getting Started
+## 開発環境のセットアップ
+1. レポジトリ直下で Flutter SDK を取得  
+   `fvm install 3.38.5`
+2. 本ディレクトリでバージョンを設定  
+   `fvm use 3.38.5`
+3. 依存関係の取得  
+   `fvm flutter pub get`
+4. 動作確認  
+   `fvm flutter doctor`
 
-This project is a starting point for a Flutter application.
+以降、Flutter 関連のコマンドは必ず `fvm flutter ...` で実行してください。
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## よく使うコマンド
+- アプリ起動: `fvm flutter run -d <デバイスID>`
+- テスト: `fvm flutter test`
+- パッケージ取得: `fvm flutter pub get`
