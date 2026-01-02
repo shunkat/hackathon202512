@@ -19,10 +19,12 @@ jobs:
       FIREBASE_PROJECT_ID: semantic-camera-hackthon
       FIREBASE_IOS_APP_ID: 1:950133384832:ios:23af39df468b7ae1cd2865
       IOS_BUNDLE_ID: com.example.client
-      GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase_key.json
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set GOOGLE_APPLICATION_CREDENTIALS path
+        run: echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase_key.json" >> "$GITHUB_ENV"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
