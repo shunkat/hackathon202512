@@ -1,0 +1,9 @@
+{
+  "cSpell.language": "en,ja",
+  "cSpell.enableFiletypes": [
+    "markdown"
+  ],
+  "cSpell.ignoreRegExpList": [
+    "/[\\u3040-\\u309F\\u30A0-\\u30FF\\u4E00-\\u9FAF\\uFF66-\\uFF9F]+/"
+  ]
+}
