@@ -49,11 +49,34 @@ jobs:
           fi
           echo "$FIREBASE_SERVICE_ACCOUNT_KEY_BASE64" | base64 --decode > "$GOOGLE_APPLICATION_CREDENTIALS"
 
+      - name: Generate Firebase access token
+        run: |
+          python3 -m pip install --quiet --upgrade google-auth google-auth-httplib2
+          FIREBASE_TOKEN=$(python3 - <<'PY'
+import os
+from google.oauth2 import service_account
+from google.auth.transport.requests import Request
+
+creds = service_account.Credentials.from_service_account_file(
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"],
+    scopes=["https://www.googleapis.com/auth/cloud-platform"],
+)
+creds.refresh(Request())
+print(creds.token)
+PY
+)
+          if [ -z "$FIREBASE_TOKEN" ]; then
+            echo "Failed to generate Firebase access token from service account."
+            exit 1
+          fi
+          echo "FIREBASE_TOKEN=$FIREBASE_TOKEN" >> "$GITHUB_ENV"
+
       - name: Download GoogleService-Info.plist
         run: |
           firebase apps:sdkconfig IOS "$FIREBASE_IOS_APP_ID" \
             --project "$FIREBASE_PROJECT_ID" \
-            --out ios/Runner/GoogleService-Info.plist
+            --out ios/Runner/GoogleService-Info.plist \
+            --token "$FIREBASE_TOKEN"
 
       - name: Import signing certificate
         uses: apple-actions/import-codesign-certs@v3
@@ -99,4 +122,5 @@ jobs:
             --app "$FIREBASE_IOS_APP_ID" \
             --project "$FIREBASE_PROJECT_ID" \
             --groups "hackathon" \
-            --release-notes "GitHub Actions build for $GITHUB_SHA"
+            --release-notes "GitHub Actions build for $GITHUB_SHA" \
+            --token "$FIREBASE_TOKEN"
