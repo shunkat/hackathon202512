@@ -28,5 +28,9 @@ Flutter 製のモバイルアプリです。FVM 経由で Flutter 3.38.5 を使�
 3. Android は `android/settings.gradle.kts` で Google Services プラグインを読み込む設定済みなので、`google-services.json` 配置後に `fvm flutter pub get` → `fvm flutter run` で初期化されます。iOS/macOS は `fvm flutter pub get` 後に `cd ios && pod install`（macOS は `cd macos && pod install`）を実行してください。
 4. FlutterFire CLI で自動設定したい場合は `dart pub global activate flutterfire_cli` の後、`fvm flutterfire configure --platforms=android,ios,macos` を実行すると各プラットフォームへ設定ファイルが配置されます（`firebase_options.dart` を出力する場合は `--out=lib/firebase_options.dart` を付与）。
 
+### ビルド時間短縮（iOS/macOS）
+- Firestore を prebuilt 版で取り込むため、`ios/Podfile` と `macos/Podfile` に `pod 'FirebaseFirestore', :git => 'https://github.com/invertase/firestore-ios-sdk-frameworks.git', :tag => '11.4.0'` を追加しています。これにより Firestore のソースビルドを避け、Pod の取得とビルド時間を短縮します。
+- FlutterFire が利用する Firebase iOS SDK のバージョンを更新した際は、上記タグも同じバージョンへ更新してください（`firebase_core` の `ios/firebase_sdk_version.rb` に記載されています）。
+
 ### 動作確認
 - 設定ファイル配置後に `fvm flutter run` を実行し、撮影→Cloud Storage へアップロード→Firestore へパス保存までエラーが出ないことを確認してください。`lib/main.dart` のカード下部に保存先パスとダウンロード URL が表示されます。
