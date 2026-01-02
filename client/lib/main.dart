@@ -4,9 +4,11 @@ import 'dart:math';
 
 import 'package:camera/camera.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 Future<void> main() async {
@@ -43,6 +45,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   CameraController? _controller;
   Timer? _shotTimer;
   PermissionStatus? _permissionStatus;
+  String? _userId;
+  bool _isSigningIn = false;
   bool _isInitializing = true;
   bool _isSending = false;
   DateTime? _lastSentAt;
@@ -84,6 +88,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       _errorMessage = null;
     });
 
+    await _ensureSignedIn();
+    if (_userId == null) {
+      setState(() => _isInitializing = false);
+      return;
+    }
+
     await _requestPermission();
     if (!_isPermissionGranted) {
       setState(() => _isInitializing = false);
@@ -92,6 +102,46 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     await _initializeCamera();
     _startTimer();
     setState(() => _isInitializing = false);
+  }
+
+  Future<void> _ensureSignedIn() async {
+    final auth = FirebaseAuth.instance;
+    final currentUser = auth.currentUser;
+    if (currentUser != null) {
+      setState(() {
+        _userId = currentUser.uid;
+      });
+      return;
+    }
+
+    setState(() {
+      _isSigningIn = true;
+    });
+    try {
+      final credential = await auth.signInAnonymously();
+      if (!mounted) return;
+      final uid = credential.user?.uid;
+      setState(() {
+        _userId = uid;
+        _errorMessage =
+            uid == null ? '匿名認証のユーザーIDを取得できませんでした。' : _errorMessage;
+      });
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = '匿名認証に失敗しました: ${e.message ?? e.code}';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = '匿名認証に失敗しました: $e';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isSigningIn = false;
+      });
+    }
   }
 
   Future<void> _requestPermission() async {
@@ -151,6 +201,16 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       return;
     }
 
+    if (_userId == null) {
+      await _ensureSignedIn();
+      if (_userId == null) {
+        setState(() {
+          _errorMessage = 'ユーザーIDの取得に失敗しました。アプリを再起動して再試行してください。';
+        });
+        return;
+      }
+    }
+
     if (!_isPermissionGranted) {
       await _requestPermission();
       if (!_isPermissionGranted) {
@@ -177,7 +237,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       final imageFile = File(file.path);
       final payloadSize = await imageFile.length();
 
-      final uploadResult = await _uploadAndRecord(imageFile);
+      final uploadResult = await _uploadAndRecord(imageFile, _userId!);
 
       if (!mounted) return;
       setState(() {
@@ -211,16 +271,22 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   Future<({String storagePath, String downloadUrl})> _uploadAndRecord(
     File imageFile,
+    String userId,
   ) async {
     final fileName =
         '${DateTime.now().toUtc().toIso8601String().replaceAll(':', '-')}_${_randomString(6)}.jpg';
-    final storagePath = 'captures/$fileName';
+    final storagePath = 'users/$userId/captures/$fileName';
     final ref = FirebaseStorage.instance.ref().child(storagePath);
     await ref.putFile(imageFile);
     final downloadUrl = await ref.getDownloadURL();
-    await FirebaseFirestore.instance.collection('captures').add({
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('captures')
+        .add({
       'storagePath': storagePath,
       'downloadUrl': downloadUrl,
+      'userId': userId,
       'createdAt': FieldValue.serverTimestamp(),
     });
     return (storagePath: storagePath, downloadUrl: downloadUrl);
@@ -259,6 +325,35 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               Text(
                 'カメラ権限: $permissionLabel',
                 style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.person_outline),
+                  title: const Text('ユーザーID'),
+                  subtitle: Text(
+                    _userId ??
+                        (_isSigningIn
+                            ? '匿名認証中…'
+                            : '未取得（再初期化してください）'),
+                  ),
+                  trailing:
+                      _userId != null ? const Icon(Icons.copy_rounded) : null,
+                  onTap: _userId == null
+                      ? null
+                      : () async {
+                          await Clipboard.setData(
+                            ClipboardData(text: _userId!),
+                          );
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('ユーザーIDをコピーしました'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                ),
               ),
               const SizedBox(height: 8),
               if (_isInitializing) ...[
