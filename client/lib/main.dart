@@ -11,6 +11,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'capture_utils.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
@@ -280,8 +282,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     File imageFile,
     String userId,
   ) async {
-    final fileName =
-        '${DateTime.now().toUtc().toIso8601String().replaceAll(':', '-')}_${_randomString(6)}.jpg';
+    final fileName = buildCaptureFileName(DateTime.now(), _random);
     final storagePath = 'users/$userId/captures/$fileName';
     final ref = FirebaseStorage.instance.ref().child(storagePath);
     await ref.putFile(imageFile);
@@ -297,16 +298,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       'createdAt': FieldValue.serverTimestamp(),
     });
     return (storagePath: storagePath, downloadUrl: downloadUrl);
-  }
-
-  String _randomString(int length) {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    return String.fromCharCodes(
-      Iterable.generate(
-        length,
-        (_) => chars.codeUnitAt(_random.nextInt(chars.length)),
-      ),
-    );
   }
 
   @override
