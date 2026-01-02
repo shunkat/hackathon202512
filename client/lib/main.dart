@@ -126,12 +126,19 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         _errorMessage =
             uid == null ? '匿名認証のユーザーIDを取得できませんでした。' : _errorMessage;
       });
-    } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException catch (e, st) {
+      debugPrint(
+        'Anonymous sign-in failed: code=${e.code}, message=${e.message}',
+      );
+      debugPrintStack(stackTrace: st);
       if (!mounted) return;
       setState(() {
-        _errorMessage = '匿名認証に失敗しました: ${e.message ?? e.code}';
+        final message = e.message ?? e.code;
+        _errorMessage = '匿名認証に失敗しました (${e.code}): $message';
       });
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('Anonymous sign-in threw an unexpected error: $e');
+      debugPrintStack(stackTrace: st);
       if (!mounted) return;
       setState(() {
         _errorMessage = '匿名認証に失敗しました: $e';
