@@ -137,8 +137,26 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _captureAndSend() async {
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized || _isSending) {
+    if (_isSending) {
+      return;
+    }
+
+    if (!_isPermissionGranted) {
+      await _requestPermission();
+      if (!_isPermissionGranted) {
+        setState(() {
+          _errorMessage = 'カメラ権限が必要です。設定から許可してください。';
+        });
+        return;
+      }
+    }
+
+    var controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      await _initializeCamera();
+      controller = _controller;
+    }
+    if (controller == null || !controller.value.isInitialized) {
       return;
     }
     setState(() {
