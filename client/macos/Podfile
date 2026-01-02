@@ -9,6 +9,24 @@ project 'Runner', {
   'Release' => :release,
 }
 
+def firebase_sdk_version_from_flutterfire
+  candidates = [
+    File.expand_path('../.symlinks/plugins/firebase_core/macos/firebase_sdk_version.rb', __FILE__),
+    File.expand_path('../.symlinks/plugins/firebase_core/ios/firebase_sdk_version.rb', __FILE__),
+    File.expand_path('../../.symlinks/plugins/firebase_core/macos/firebase_sdk_version.rb', __FILE__),
+    File.expand_path('../../.symlinks/plugins/firebase_core/ios/firebase_sdk_version.rb', __FILE__)
+  ]
+
+  candidates.each do |path|
+    next unless File.exist?(path)
+    require path
+    return firebase_sdk_version!() if defined?(firebase_sdk_version!)
+  end
+
+  # フォールバック（FlutterFire の sdk_version が取得できない場合）
+  '11.15.0'
+end
+
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'ephemeral', 'Flutter-Generated.xcconfig'), __FILE__)
   unless File.exist?(generated_xcode_build_settings_path)
@@ -30,8 +48,8 @@ target 'Runner' do
   use_frameworks!
 
   # Firestore を prebuilt バイナリにして pod install / ビルドを高速化
-  # FlutterFire が固定している Firebase SDK バージョン（11.4.0）に合わせる
-  pod 'FirebaseFirestore', :git => 'https://github.com/invertase/firestore-ios-sdk-frameworks.git', :tag => '11.4.0'
+  # FlutterFire が固定している Firebase SDK バージョンに合わせて tag を自動取得する
+  pod 'FirebaseFirestore', :git => 'https://github.com/invertase/firestore-ios-sdk-frameworks.git', :tag => firebase_sdk_version_from_flutterfire
 
   flutter_install_all_macos_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
