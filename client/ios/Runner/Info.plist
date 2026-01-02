@@ -45,5 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>定期撮影のためにカメラへのアクセスを許可してください。</string>
 </dict>
 </plist>
