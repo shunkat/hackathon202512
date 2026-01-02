@@ -53,8 +53,10 @@ jobs:
 
       - name: Generate Firebase access token
         run: |
-          python3 -m pip install --quiet --upgrade google-auth google-auth-httplib2
-          FIREBASE_TOKEN=$(python3 - <<'PY'
+          python3 -m venv "$RUNNER_TEMP/firebase-venv"
+          source "$RUNNER_TEMP/firebase-venv/bin/activate"
+          python -m pip install --quiet --upgrade google-auth google-auth-httplib2
+          FIREBASE_TOKEN=$(python - <<'PY'
           import os
           from google.oauth2 import service_account
           from google.auth.transport.requests import Request
