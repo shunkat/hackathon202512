@@ -146,10 +146,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         _errorMessage = '匿名認証に失敗しました: $e';
       });
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isSigningIn = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSigningIn = false;
+        });
+      }
     }
   }
 
@@ -343,7 +344,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                           await Clipboard.setData(
                             ClipboardData(text: _userId!),
                           );
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('ユーザーIDをコピーしました'),

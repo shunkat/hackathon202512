@@ -19,5 +19,5 @@ String buildCaptureFileName(
 }) {
   final timestamp = now.toUtc().toIso8601String().replaceAll(':', '-');
   final randomSuffix = generateRandomString(randomLength, random);
-  return '$timestamp\_$randomSuffix.jpg';
+  return '${timestamp}_$randomSuffix.jpg';
 }
