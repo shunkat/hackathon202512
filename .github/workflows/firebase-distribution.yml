@@ -19,6 +19,7 @@ jobs:
       FIREBASE_PROJECT_ID: semantic-camera-hackthon
       FIREBASE_IOS_APP_ID: 1:950133384832:ios:23af39df468b7ae1cd2865
       IOS_BUNDLE_ID: com.example.client
+      GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase_key.json
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,9 +39,17 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      - name: Download GoogleService-Info.plist
+      - name: Setup Firebase auth (service account)
         env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT_KEY_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_KEY_BASE64" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 is not set. Please add the base64 encoded service account JSON to secrets."
+            exit 1
+          fi
+          echo "$FIREBASE_SERVICE_ACCOUNT_KEY_BASE64" | base64 --decode > "$GOOGLE_APPLICATION_CREDENTIALS"
+
+      - name: Download GoogleService-Info.plist
         run: |
           firebase apps:sdkconfig IOS "$FIREBASE_IOS_APP_ID" \
             --project "$FIREBASE_PROJECT_ID" \
@@ -85,8 +94,6 @@ jobs:
         run: flutter build ipa --release --export-options-plist ios/exportOptions.plist
 
       - name: Distribute to Firebase App Distribution
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
           firebase appdistribution:distribute build/ios/ipa/Runner.ipa \
             --app "$FIREBASE_IOS_APP_ID" \
