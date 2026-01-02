@@ -8,7 +8,12 @@ permissions:
 
 jobs:
   flutter-client:
+    name: Flutter ${{ matrix.task }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [analyze, test, build]
     defaults:
       run:
         working-directory: client
@@ -26,7 +31,13 @@ jobs:
         run: flutter pub get
 
       - name: Analyze
+        if: matrix.task == 'analyze'
         run: flutter analyze
 
       - name: Test
+        if: matrix.task == 'test'
         run: flutter test
+
+      - name: Build (web)
+        if: matrix.task == 'build'
+        run: flutter build web --release
