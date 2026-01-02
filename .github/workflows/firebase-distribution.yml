@@ -53,18 +53,18 @@ jobs:
         run: |
           python3 -m pip install --quiet --upgrade google-auth google-auth-httplib2
           FIREBASE_TOKEN=$(python3 - <<'PY'
-import os
-from google.oauth2 import service_account
-from google.auth.transport.requests import Request
+          import os
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
 
-creds = service_account.Credentials.from_service_account_file(
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"],
-    scopes=["https://www.googleapis.com/auth/cloud-platform"],
-)
-creds.refresh(Request())
-print(creds.token)
-PY
-)
+          creds = service_account.Credentials.from_service_account_file(
+              os.environ["GOOGLE_APPLICATION_CREDENTIALS"],
+              scopes=["https://www.googleapis.com/auth/cloud-platform"],
+          )
+          creds.refresh(Request())
+          print(creds.token)
+          PY
+          )
           if [ -z "$FIREBASE_TOKEN" ]; then
             echo "Failed to generate Firebase access token from service account."
             exit 1
