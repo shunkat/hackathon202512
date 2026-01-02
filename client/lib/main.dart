@@ -251,7 +251,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -297,12 +297,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Icon(Icons.autorenew, size: 18),
                             const SizedBox(width: 6),
-                            Text(
-                              '10秒ごとに自動撮影し、Cloud Storageへ保存します。',
-                              style: Theme.of(context).textTheme.bodyMedium,
+                            Expanded(
+                              child: Text(
+                                '10秒ごとに自動撮影し、Cloud Storageへ保存します。',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
                             ),
                           ],
                         ),
