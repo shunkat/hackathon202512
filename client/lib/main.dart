@@ -1,11 +1,17 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:math';
 
 import 'package:camera/camera.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -41,7 +47,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   bool _isSending = false;
   DateTime? _lastSentAt;
   int? _lastPayloadSize;
+  String? _lastStoragePath;
+  String? _lastDownloadUrl;
   String? _errorMessage;
+  final _random = Random();
 
   @override
   void initState() {
@@ -63,7 +72,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed && _controller != null) {
       _startTimer();
     }
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
       _shotTimer?.cancel();
     }
   }
@@ -164,15 +174,22 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
     try {
       final file = await controller.takePicture();
-      final bytes = await file.readAsBytes();
+      final imageFile = File(file.path);
+      final payloadSize = await imageFile.length();
 
-      // サーバー送信のモック。ここでHTTPクライアントに差し替えられる。
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+      final uploadResult = await _uploadAndRecord(imageFile);
 
       if (!mounted) return;
       setState(() {
         _lastSentAt = DateTime.now();
-        _lastPayloadSize = bytes.length;
+        _lastPayloadSize = payloadSize;
+        _lastStoragePath = uploadResult.storagePath;
+        _lastDownloadUrl = uploadResult.downloadUrl;
+      });
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'クラウド保存に失敗しました: ${e.message ?? e.code}';
       });
     } catch (e) {
       if (!mounted) return;
@@ -192,21 +209,47 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     await openAppSettings();
   }
 
+  Future<({String storagePath, String downloadUrl})> _uploadAndRecord(
+    File imageFile,
+  ) async {
+    final fileName =
+        '${DateTime.now().toUtc().toIso8601String().replaceAll(':', '-')}_${_randomString(6)}.jpg';
+    final storagePath = 'captures/$fileName';
+    final ref = FirebaseStorage.instance.ref().child(storagePath);
+    await ref.putFile(imageFile);
+    final downloadUrl = await ref.getDownloadURL();
+    await FirebaseFirestore.instance.collection('captures').add({
+      'storagePath': storagePath,
+      'downloadUrl': downloadUrl,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return (storagePath: storagePath, downloadUrl: downloadUrl);
+  }
+
+  String _randomString(int length) {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    return String.fromCharCodes(
+      Iterable.generate(
+        length,
+        (_) => chars.codeUnitAt(_random.nextInt(chars.length)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    final permissionLabel = _permissionStatus == null
-        ? '未確認'
-        : _isPermissionGranted
-            ? '許可済み'
-            : _permissionStatus!.isPermanentlyDenied
-                ? '永久に拒否（設定アプリから許可してください）'
-                : '未許可';
+    final permissionLabel = () {
+      if (_permissionStatus == null) return '未確認';
+      if (_isPermissionGranted) return '許可済み';
+      if (_permissionStatus!.isPermanentlyDenied) {
+        return '永久に拒否（設定アプリから許可してください）';
+      }
+      return '未許可';
+    }();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
+      appBar: AppBar(title: Text(widget.title)),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -258,7 +301,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                             const Icon(Icons.autorenew, size: 18),
                             const SizedBox(width: 6),
                             Text(
-                              '10秒ごとに自動撮影・モック送信します。',
+                              '10秒ごとに自動撮影し、Cloud Storageへ保存します。',
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ],
@@ -270,6 +313,16 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                               : '直近送信: ${_lastSentAt!.toLocal()} (サイズ: ${_lastPayloadSize ?? 0} bytes)',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
+                        if (_lastStoragePath != null)
+                          Text(
+                            '保存先: $_lastStoragePath',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        if (_lastDownloadUrl != null)
+                          Text(
+                            'URL: $_lastDownloadUrl',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                         if (_isSending)
                           const Padding(
                             padding: EdgeInsets.only(top: 6),
@@ -278,7 +331,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                 SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
                                 SizedBox(width: 8),
                                 Text('送信中…'),
