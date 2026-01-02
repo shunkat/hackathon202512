@@ -1,0 +1,33 @@
+line-length = 88
+target-version = "py311"
+
+[lint]
+# select = ["E4", "E7", "E9", "F"]
+select = ["ALL"]
+ignore = [
+    "T201", # print() の使用を許可
+    "D400", "D415", # docstringの末尾がピリオド.の強制を無効化
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D107",
+    "INP001", # __init__.py の設定不要
+    "ERA001", # コメントアウトされたコードをOK
+    "RET504", # 直接returnしなくてもOK
+    "LOG015",
+    "G004",
+    "TRY401",
+]
+# 全てのLinter拡張機能を有効化
+extend-select = ["ALL"]
+
+
+fixable = ["ALL"]
+unfixable = []
+
+[format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+# プレビュー中の機能を無効化
+preview = false
