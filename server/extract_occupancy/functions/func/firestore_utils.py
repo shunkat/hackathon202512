@@ -25,8 +25,8 @@ def save_detection_result(
             "occupancy_rate": result.get("occupancy_rate", 0),
             "file_meta": {
                 "content_type": processed_data["content_type"],
-                "image_bytes": processed_data["image_bytes"],
-                "image_bgr": processed_data["image_bgr"],
+                # "image_bytes": processed_data["image_bytes"],
+                # "image_bgr": processed_data["image_bgr"],
                 "size": processed_data["size"],
             },
             "inference": {
@@ -49,5 +49,5 @@ def save_detection_result(
 
         print(f"Saved detection result to Firestore: {doc_ref.id}")
 
-    except Exception:
-        print("Failed to save result to Firestore")
+    except Exception as e:
+        raise ValueError(f"Failed to save result to Firestore: {str(e)}")
