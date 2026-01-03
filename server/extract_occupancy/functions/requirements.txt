@@ -1,2 +1,7 @@
 firebase_functions~=0.1.0
 python-dotenv
+PyYAML
+numpy>=2.4.0
+opencv-python>=4.11.0.86
+ultralytics>=8.3.246
+google-cloud-storage>=2.10.0
