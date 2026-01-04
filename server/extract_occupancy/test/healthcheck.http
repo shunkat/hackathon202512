@@ -1,3 +1,8 @@
-@localhost=http://127.0.0.1:5001/semantic-camera-hackthon/asia-northeast1
+@localhost=http://127.0.0.1:5001/semantic-camera-hackthon/us-east1
+@host=https:xxxxx
 
+#### local
 GET {{localhost}}/http_health_check
+
+#### dev
+GET {{host}}/http_health_check

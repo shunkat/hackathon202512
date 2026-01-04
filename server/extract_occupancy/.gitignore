@@ -244,5 +244,5 @@ pyrightconfig.json
 
 .DS_Store
 
-notebooks/inputs/
-notebooks/outputs/
+notebooks/datasets/
+notebooks/archives/

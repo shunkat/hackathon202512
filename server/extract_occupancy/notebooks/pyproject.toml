@@ -1,0 +1,16 @@
+[project]
+name = "extract_occupancy_notebooks"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12.0"
+dependencies = [
+    "albumentations>=2.0.8",
+    "ipykernel>=7.1.0",
+    "jupyter>=1.1.1",
+    "numpy>=2.4.0",
+    "opencv-python>=4.11.0.86",
+    "scikit-learn>=1.8.0",
+    "tqdm>=4.67.1",
+    "ultralytics>=8.3.246",
+]
