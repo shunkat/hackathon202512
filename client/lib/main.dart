@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,6 +11,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:image/image.dart' as img;
+import 'package:path_provider/path_provider.dart';
 
 import 'capture_utils.dart';
 
@@ -57,6 +60,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   String? _lastDownloadUrl;
   String? _errorMessage;
   final _random = Random();
+  CameraImage? _latestImage;
+  bool _isSilentMode = true; // 無音モードのフラグ
 
   @override
   void initState() {
@@ -181,9 +186,17 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         backCamera,
         ResolutionPreset.medium,
         enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.jpeg,
+        imageFormatGroup: _isSilentMode ? ImageFormatGroup.bgra8888 : ImageFormatGroup.jpeg,
       );
       await controller.initialize();
+
+      // 無音モードの場合のみ画像ストリームを開始
+      if (_isSilentMode) {
+        controller.startImageStream((image) {
+          _latestImage = image;
+        });
+      }
+
       setState(() {
         _controller = controller;
       });
@@ -243,10 +256,22 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       _isSending = true;
     });
     try {
-      final file = await controller.takePicture();
-      final imageFile = File(file.path);
-      final payloadSize = await imageFile.length();
+      File imageFile;
 
+      if (_isSilentMode) {
+        // 無音モード: 画像ストリームから取得
+        final cameraImage = _latestImage;
+        if (cameraImage == null) {
+          throw Exception('画像データが取得できませんでした');
+        }
+        imageFile = await _convertCameraImageToFile(cameraImage);
+      } else {
+        // 通常モード: takePictureを使用
+        final xFile = await controller.takePicture();
+        imageFile = File(xFile.path);
+      }
+
+      final payloadSize = await imageFile.length();
       final uploadResult = await _uploadAndRecord(imageFile, _userId!);
 
       if (!mounted) return;
@@ -277,6 +302,80 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   Future<void> _openSettings() async {
     await openAppSettings();
+  }
+
+  Future<File> _convertCameraImageToFile(CameraImage cameraImage) async {
+    try {
+      final int width = cameraImage.width;
+      final int height = cameraImage.height;
+
+      // iOSのBGRA8888形式の場合
+      if (cameraImage.format.group == ImageFormatGroup.bgra8888) {
+        final img.Image image = img.Image.fromBytes(
+          width: width,
+          height: height,
+          bytes: cameraImage.planes[0].bytes.buffer,
+          order: img.ChannelOrder.bgra,
+        );
+
+        // JPEGにエンコード
+        final jpegBytes = img.encodeJpg(image, quality: 85);
+
+        // 一時ファイルに保存
+        final directory = await getTemporaryDirectory();
+        final filePath =
+            '${directory.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final file = File(filePath);
+        await file.writeAsBytes(jpegBytes);
+
+        return file;
+      }
+
+      // YUV420形式の場合
+      final img.Image image = img.Image(width: width, height: height);
+
+      final yPlane = cameraImage.planes[0];
+      final uPlane = cameraImage.planes[1];
+      final vPlane = cameraImage.planes[2];
+
+      for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+          final int yIndex = y * yPlane.bytesPerRow + x;
+          final int uvIndex = (y ~/ 2) * uPlane.bytesPerRow + (x ~/ 2) * (uPlane.bytesPerPixel ?? 1);
+
+          if (yIndex >= yPlane.bytes.length ||
+              uvIndex >= uPlane.bytes.length ||
+              uvIndex >= vPlane.bytes.length) {
+            continue;
+          }
+
+          final int yValue = yPlane.bytes[yIndex];
+          final int uValue = uPlane.bytes[uvIndex];
+          final int vValue = vPlane.bytes[uvIndex];
+
+          // YUV to RGB conversion
+          final int r = (yValue + 1.402 * (vValue - 128)).round().clamp(0, 255);
+          final int g = (yValue - 0.344136 * (uValue - 128) - 0.714136 * (vValue - 128)).round().clamp(0, 255);
+          final int b = (yValue + 1.772 * (uValue - 128)).round().clamp(0, 255);
+
+          image.setPixelRgb(x, y, r, g, b);
+        }
+      }
+
+      // JPEGにエンコード
+      final jpegBytes = img.encodeJpg(image, quality: 85);
+
+      // 一時ファイルに保存
+      final directory = await getTemporaryDirectory();
+      final filePath =
+          '${directory.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final file = File(filePath);
+      await file.writeAsBytes(jpegBytes);
+
+      return file;
+    } catch (e) {
+      throw Exception('画像変換に失敗しました: $e');
+    }
   }
 
   Future<({String storagePath, String downloadUrl})> _uploadAndRecord(
@@ -352,6 +451,25 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                             ),
                           );
                         },
+                ),
+              ),
+              const SizedBox(height: 8),
+              Card(
+                child: SwitchListTile(
+                  secondary: Icon(_isSilentMode ? Icons.volume_off : Icons.volume_up),
+                  title: const Text('無音モード'),
+                  subtitle: Text(_isSilentMode ? '無音で撮影します' : 'シャッター音が鳴ります'),
+                  value: _isSilentMode,
+                  onChanged: (value) async {
+                    setState(() {
+                      _isSilentMode = value;
+                    });
+                    // カメラを再初期化
+                    if (_isPermissionGranted) {
+                      await _initializeCamera();
+                      _startTimer();
+                    }
+                  },
                 ),
               ),
               const SizedBox(height: 8),
