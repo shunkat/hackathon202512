@@ -16,7 +16,7 @@ export const occupancyApi = functions
 
       const occupancyEventsRef = db
         .collection("users")
-        .doc("test")
+        .doc("txjoCFOzh2VqtjWagVDtzMywJ5A3")
         .collection("occupancy_events");
 
       const snap = await occupancyEventsRef
@@ -31,18 +31,16 @@ export const occupancyApi = functions
 
       const data = snap.docs[0].data() as {
         captured_at: string;
-        chairs_num: number;
-        persons_num: number;
+        empty_seat_num: number;
         occupancy_rate: number;
-        occupied_chairs_num: number;
+        occupied_seat_num: number;
       };
 
       res.json({
         captured_at: new Date(data.captured_at).toISOString(),
-        chairs_num: data.chairs_num,
-        persons_num: data.persons_num,
+        empty_seat_num: data.empty_seat_num,
         occupancy_rate: data.occupancy_rate,
-        occupied_chairs_num: data.occupied_chairs_num,
+        occupied_seat_num: data.occupied_seat_num,
       });
     } catch (e) {
       console.error(e);
