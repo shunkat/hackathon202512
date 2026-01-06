@@ -12,7 +12,7 @@ def save_detection_result(
 ) -> None:
     """Save the occupancy detection result to Firestore"""
     try:
-        prefix, user_id, file_name = storage_file_name.split("/")
+        prefix, user_id, _, file_name = storage_file_name.split("/")
         collection_name = f"{prefix}/{user_id}/occupancy_events"
         doc_data = {
             "user_id": user_id,
