@@ -19,10 +19,10 @@ def save_detection_result(
             "file_name": file_name,
             "storage_path": f"{bucket_name}/{storage_file_name}",
             "detections_num": len(result.get("detections", [])),
-            "persons_num": result.get("persons_num", 0),
-            "chairs_num": result.get("chairs_num", 0),
-            "occupied_chairs_num": result.get("occupied_chairs_num", 0),
-            "occupancy_rate": result.get("occupancy_rate", 0),
+            "empty_seat_num": result.get("empty_seat_num", 0),
+            "occupied_seat_num": result.get("occupied_seat_num", 0),
+            "occupancy_rate": result.get("occupied_seat_num", 0)
+            / (result.get("empty_seat_num", 0) + result.get("occupied_seat_num", 0)),
             "file_meta": {
                 "content_type": processed_data["content_type"],
                 # "image_bytes": processed_data["image_bytes"],
@@ -30,8 +30,8 @@ def save_detection_result(
                 "size": processed_data["size"],
             },
             "inference": {
-                "model_name": "yolov8n",
-                "model_version": "8.2.0",
+                "model_name": processed_data["model_name"],
+                "model_version": processed_data["model_version"],
                 "occupancy_method": processed_data["method"],
                 "classes_filter": processed_data["class_ids"],
                 "conf_threshold": processed_data["conf"],

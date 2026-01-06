@@ -9,7 +9,7 @@ _model = None
 def get_model():
     global _model
     if _model is None:
-        _model = YOLO("models/yolov8n.pt")
+        _model = YOLO("models/finetuned_yolo.pt")
     return _model
 
 

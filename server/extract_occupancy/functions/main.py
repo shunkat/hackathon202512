@@ -7,7 +7,15 @@ from firebase_admin import firestore
 from firebase_functions import https_fn
 from firebase_functions import storage_fn, options
 
-from config.settings import BUCKET, REGION
+from config.settings import (
+    BUCKET,
+    REGION,
+    NMS_IOU,
+    CONF,
+    CLASSES,
+    MODEL_NAME,
+    MODEL_VERSION,
+)
 from func.occupancy_detector import extract_occupancy_from_image
 from func.firestore_utils import save_detection_result
 from func.storage_utils import (
@@ -77,15 +85,16 @@ def storage_event_health_check(
 
         # Run occupancy detection
         print("Running occupancy detection")
-        nms_iou = 0.7
-        conf = 0.25
-        class_ids = [0, 56]
         result = extract_occupancy_from_image(
             image_bgr,
-            nms_iou=nms_iou,
-            conf=conf,
-            class_ids=class_ids,
+            nms_iou=NMS_IOU,
+            conf=CONF,
+            class_ids=CLASSES,
         )
+
+        unique_class_ids = set()
+        for detection in result["detections"]:
+            unique_class_ids.add(detection["class_id"])
 
         processed_data = {
             "bucket": obj.bucket,
@@ -97,10 +106,12 @@ def storage_event_health_check(
             "updated": obj.updated,
             "image_bytes": image_bytes,
             "image_bgr": image_bgr,
-            "iou": nms_iou,
-            "conf": conf,
-            "class_ids": class_ids,
+            "iou": NMS_IOU,
+            "conf": CONF,
+            "class_ids": list(unique_class_ids),
             "method": "method1",
+            "model_name": MODEL_NAME,
+            "model_version": MODEL_VERSION,
         }
 
         print(f"Detection complete: {len(result['detections'])} objects detected")
