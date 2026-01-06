@@ -12,15 +12,17 @@ import albumentations as A
 
 # ========= 設定 =========
 RAW_DIR = Path("datasets/raw")
-OUT_DIR = Path("datasets/augmented")
 SPLIT_DIR = Path("datasets/split")
+DATA_YAML_PATH = Path("datasets/data.yaml")
 
-# 4枚なら 80〜200 が現実的。まず 120(=約480枚) 推奨
-N_AUG_PER_IMAGE = 120
 SEED = 42
 
 # 0/1 のクラス
 NAMES = ["empty_seat", "occupied_seat"]
+
+# trainだけ増やしたいときだけTrue
+AUGMENT_TRAIN = True
+N_AUG_PER_IMAGE = 10  # 50枚あるなら 10〜30 くらいで十分なことが多い
 
 # 椅子(小物)が消えにくい“安全寄り”Aug
 transform = A.Compose(
@@ -124,102 +126,150 @@ def write_yolo_label(
     label_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 
 
-def main():
-    in_img_dir = RAW_DIR / "images"
-    in_lbl_dir = RAW_DIR / "labels"
-    out_img_dir = OUT_DIR / "images"
-    out_lbl_dir = OUT_DIR / "labels"
-    out_img_dir.mkdir(parents=True, exist_ok=True)
-    out_lbl_dir.mkdir(parents=True, exist_ok=True)
+def ensure_clean_dir(path: Path) -> None:
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir(parents=True, exist_ok=True)
 
-    img_paths = sorted(
+
+def list_raw_images(in_img_dir: Path) -> list[Path]:
+    return sorted(
         [
             p
             for p in in_img_dir.glob("*")
             if p.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]
         ],
     )
-    if not img_paths:
-        msg = f"No images in {in_img_dir}"
-        raise RuntimeError(msg)
 
-    for img_path in tqdm(img_paths, desc="augment"):
-        stem = img_path.stem
-        label_path = in_lbl_dir / f"{stem}.txt"
 
-        img = cv2.imread(str(img_path))
-        if img is None:
+def copy_one_sample(
+    img_path: Path, lbl_path: Path, out_img_dir: Path, out_lbl_dir: Path
+) -> None:
+    """画像とラベルをコピー(raw → split)"""
+    shutil.copy2(img_path, out_img_dir / img_path.name)
+    if lbl_path.exists():
+        shutil.copy2(lbl_path, out_lbl_dir / lbl_path.name)
+
+
+def augment_one_image_to_train(
+    img_path: Path,
+    lbl_path: Path,
+    out_img_dir: Path,
+    out_lbl_dir: Path,
+    n_aug: int,
+) -> None:
+    """Train にだけ拡張を生成して書き出す"""
+    stem = img_path.stem
+    img = cv2.imread(str(img_path))
+    if img is None:
+        return
+
+    class_ids, bboxes = read_yolo_label(lbl_path)
+
+    # 元画像も train に残す(名前衝突回避のため _orig を付与)
+    out_orig_stem = f"{stem}_orig"
+    cv2.imwrite(str(out_img_dir / f"{out_orig_stem}{img_path.suffix}"), img)
+    write_yolo_label(out_lbl_dir / f"{out_orig_stem}.txt", class_ids, bboxes)
+
+    if not AUGMENT_TRAIN or n_aug <= 0:
+        return
+
+    for i in range(n_aug):
+        aug = transform(image=img, bboxes=bboxes, class_ids=class_ids)
+        aug_img = aug["image"]
+        aug_boxes = aug["bboxes"]
+        aug_cls = aug["class_ids"]
+
+        # 変換で箱が全部消えたらスキップ
+        if len(aug_boxes) == 0:
             continue
 
-        class_ids, bboxes = read_yolo_label(label_path)
+        out_stem = f"{stem}_aug{i:04d}"
+        cv2.imwrite(str(out_img_dir / f"{out_stem}{img_path.suffix}"), aug_img)
+        write_yolo_label(out_lbl_dir / f"{out_stem}.txt", aug_cls, aug_boxes)
 
-        # 元画像もコピー(学習安定)
-        cv2.imwrite(str(out_img_dir / f"{stem}_orig{img_path.suffix}"), img)
-        write_yolo_label(out_lbl_dir / f"{stem}_orig.txt", class_ids, bboxes)
 
-        for i in range(N_AUG_PER_IMAGE):
-            aug = transform(image=img, bboxes=bboxes, class_ids=class_ids)
-            aug_img = aug["image"]
-            aug_boxes = aug["bboxes"]
-            aug_cls = aug["class_ids"]
+def main():
+    in_img_dir = RAW_DIR / "images"
+    in_lbl_dir = RAW_DIR / "labels"
 
-            if len(aug_boxes) == 0:
-                continue
+    img_paths = list_raw_images(in_img_dir)
+    if not img_paths:
+        raise RuntimeError(f"No images in {in_img_dir}")
 
-            out_stem = f"{stem}_aug{i:04d}"
-            cv2.imwrite(str(out_img_dir / f"{out_stem}{img_path.suffix}"), aug_img)
-            write_yolo_label(out_lbl_dir / f"{out_stem}.txt", aug_cls, aug_boxes)
-
-    print("done: augmented")
-
-    # --- split into train/val ---
-    if SPLIT_DIR.exists():
-        shutil.rmtree(SPLIT_DIR)
-
-    (SPLIT_DIR / "images/train").mkdir(parents=True, exist_ok=True)
-    (SPLIT_DIR / "images/val").mkdir(parents=True, exist_ok=True)
-    (SPLIT_DIR / "labels/train").mkdir(parents=True, exist_ok=True)
-    (SPLIT_DIR / "labels/val").mkdir(parents=True, exist_ok=True)
-
-    # 全画像のパスを取得
-    all_images = sorted(
-        [
-            p
-            for p in out_img_dir.glob("*")
-            if p.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]
-        ],
-    )
-
-    # 8:2 に分割
-    train_imgs, val_imgs = train_test_split(
-        all_images,
-        test_size=0.2,
+    # ============================================
+    # 先に raw を train/val/test に分割する
+    # ============================================
+    # まず test を切り出し、残りを train/val に分ける（70/15/15）
+    trainval_imgs, test_imgs = train_test_split(
+        img_paths,
+        test_size=0.15,
         random_state=SEED,
+        shuffle=True,
     )
 
-    def copy_files(img_list: list[Path], split_name: str) -> None:
-        for img_p in tqdm(img_list, desc=f"split {split_name}"):
-            lbl_p = out_lbl_dir / f"{img_p.stem}.txt"
+    train_imgs, val_imgs = train_test_split(
+        trainval_imgs,
+        test_size=0.1765,  # 0.1765 * 0.85 ≒ 0.15 → valも約15%にするため
+        random_state=SEED,
+        shuffle=True,
+    )
 
-            shutil.copy2(img_p, SPLIT_DIR / "images" / split_name / img_p.name)
-            if lbl_p.exists():
-                shutil.copy2(lbl_p, SPLIT_DIR / "labels" / split_name / lbl_p.name)
+    # split ディレクトリを作り直し
+    ensure_clean_dir(SPLIT_DIR)
+    for split_name in ["train", "val", "test"]:
+        (SPLIT_DIR / f"images/{split_name}").mkdir(parents=True, exist_ok=True)
+        (SPLIT_DIR / f"labels/{split_name}").mkdir(parents=True, exist_ok=True)
 
-    copy_files(train_imgs, "train")
-    copy_files(val_imgs, "val")
+    # ============================================
+    # val/test は 拡張しない
+    # ============================================
+    def copy_split(img_list: list[Path], split_name: str) -> None:
+        out_img_dir = SPLIT_DIR / "images" / split_name
+        out_lbl_dir = SPLIT_DIR / "labels" / split_name
+        for img_p in tqdm(img_list, desc=f"copy raw -> {split_name}"):
+            lbl_p = in_lbl_dir / f"{img_p.stem}.txt"
+            copy_one_sample(img_p, lbl_p, out_img_dir, out_lbl_dir)
 
-    # data.yaml
+    copy_split(val_imgs, "val")
+    copy_split(test_imgs, "test")
+
+    # ============================================
+    # train は元画像をコピーして、それに拡張を加える
+    # ============================================
+    train_out_img_dir = SPLIT_DIR / "images" / "train"
+    train_out_lbl_dir = SPLIT_DIR / "labels" / "train"
+
+    for img_p in tqdm(train_imgs, desc="augment -> train"):
+        lbl_p = in_lbl_dir / f"{img_p.stem}.txt"
+        augment_one_image_to_train(
+            img_path=img_p,
+            lbl_path=lbl_p,
+            out_img_dir=train_out_img_dir,
+            out_lbl_dir=train_out_lbl_dir,
+            n_aug=N_AUG_PER_IMAGE,
+        )
+
+    # data.yaml(train/val/test を明示)
     data_yaml = {
         "path": str(SPLIT_DIR.resolve()),
         "train": "images/train",
         "val": "images/val",
+        "test": "images/test",
         "names": dict(enumerate(NAMES)),
     }
-    Path("datasets/data.yaml").write_text(
+    DATA_YAML_PATH.write_text(
         yaml.safe_dump(data_yaml, sort_keys=False),
         encoding="utf-8",
     )
-    print("done: split + wrote data.yaml")
+
+    print("done:")
+    print(
+        f"  train raw count: {len(train_imgs)} (aug per image: {N_AUG_PER_IMAGE if AUGMENT_TRAIN else 0})"
+    )
+    print(f"  val raw count:   {len(val_imgs)}")
+    print(f"  test raw count:  {len(test_imgs)}")
+    print(f"  wrote: {DATA_YAML_PATH}")
 
 
 if __name__ == "__main__":

@@ -25,3 +25,9 @@ firebase emulators:start
 ## テスト手順
 
 test配下で実行
+
+## notebooks
+
+```zsh
+uv run python -m ipykernel install --user --name extract-occupancy --display-name "Python312 (extract-occupancy)"
+```
