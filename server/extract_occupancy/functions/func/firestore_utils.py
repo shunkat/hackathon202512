@@ -14,15 +14,20 @@ def save_detection_result(
     try:
         prefix, user_id, _, file_name = storage_file_name.split("/")
         collection_name = f"{prefix}/{user_id}/occupancy_events"
+
+        empty_num = result.get("empty_seat_num", 0)
+        occupied_num = result.get("occupied_seat_num", 0)
+        total_num = empty_num + occupied_num
+        occupancy_rate = occupied_num / total_num if total_num > 0 else 0.0
+
         doc_data = {
             "user_id": user_id,
             "file_name": file_name,
             "storage_path": f"{bucket_name}/{storage_file_name}",
             "detections_num": len(result.get("detections", [])),
-            "empty_seat_num": result.get("empty_seat_num", 0),
-            "occupied_seat_num": result.get("occupied_seat_num", 0),
-            "occupancy_rate": result.get("occupied_seat_num", 0)
-            / (result.get("empty_seat_num", 0) + result.get("occupied_seat_num", 0)),
+            "empty_seat_num": empty_num,
+            "occupied_seat_num": occupied_num,
+            "occupancy_rate": occupancy_rate,
             "file_meta": {
                 "content_type": processed_data["content_type"],
                 # "image_bytes": processed_data["image_bytes"],
