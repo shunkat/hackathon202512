@@ -15,8 +15,12 @@ def save_detection_result(
         prefix, user_id, _, file_name = storage_file_name.split("/")
         collection_name = f"{prefix}/{user_id}/occupancy_events"
 
-        empty_num = result.get("empty_seat_num", 0)
-        occupied_num = result.get("occupied_seat_num", 0)
+        detections = result.get("detections", [])
+        # detectionsのlist[dict]からclass_nameがempty_seatのものとoccupied_seatのものそれぞれの数を数える
+        empty_num = sum(1 for det in detections if det["class_name"] == "empty_seat")
+        occupied_num = sum(
+            1 for det in detections if det["class_name"] == "occupied_seat"
+        )
         total_num = empty_num + occupied_num
         occupancy_rate = occupied_num / total_num if total_num > 0 else 0.0
 
@@ -24,7 +28,7 @@ def save_detection_result(
             "user_id": user_id,
             "file_name": file_name,
             "storage_path": f"{bucket_name}/{storage_file_name}",
-            "detections_num": len(result.get("detections", [])),
+            "detections_num": len(detections),
             "empty_seat_num": empty_num,
             "occupied_seat_num": occupied_num,
             "occupancy_rate": occupancy_rate,
@@ -43,7 +47,7 @@ def save_detection_result(
                 "nms_iou_threshold": processed_data["iou"],
                 # "runtime_ms": processed_data["runtime_ms"],
             },
-            "detections": result.get("detections", []),
+            "detections": detections,
             "captured_at": processed_data["updated"],
             "created_at": firestore.SERVER_TIMESTAMP,
             "updated_at": firestore.SERVER_TIMESTAMP,
